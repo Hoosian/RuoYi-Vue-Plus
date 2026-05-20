@@ -50,3 +50,9 @@ nbdist/
 !*/build/*.xml
 
 .flattened-pom.xml
+
+# 项目内部文档（含架构设计、表结构，不提交到公开仓库）
+/docs/
+
+# Claude 本地笔记索引（含个人文件路径）
+/CLAUDE_NOTES.md

@@ -3,6 +3,7 @@ package org.dromara.web.service.impl;
 import cn.dev33.satoken.stp.StpUtil;
 import cn.dev33.satoken.stp.parameter.SaLoginParameter;
 import cn.hutool.core.util.ObjectUtil;
+import cn.hutool.core.util.RandomUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import me.zhyd.oauth.config.AuthConfig;
@@ -15,16 +16,21 @@ import me.zhyd.oauth.request.AuthWechatMiniProgramRequest;
 import org.dromara.common.core.constant.SystemConstants;
 import org.dromara.common.core.domain.model.XcxLoginBody;
 import org.dromara.common.core.domain.model.XcxLoginUser;
+import org.dromara.common.core.enums.UserType;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.ValidatorUtils;
 import org.dromara.common.json.utils.JsonUtils;
 import org.dromara.common.satoken.utils.LoginHelper;
-import org.dromara.system.domain.vo.SysClientVo;
-import org.dromara.system.domain.vo.SysUserVo;
+import org.dromara.system.domain.AppUser;
+import org.dromara.system.domain.vo.AppUserVo;
+import org.dromara.system.service.IAppUserService;
+import org.dromara.web.config.WxMiniappProperties;
 import org.dromara.web.domain.vo.LoginVo;
 import org.dromara.web.service.IAuthStrategy;
-import org.dromara.web.service.SysLoginService;
+import org.dromara.system.domain.vo.SysClientVo;
 import org.springframework.stereotype.Service;
+
+import java.util.Map;
 
 /**
  * 小程序认证策略
@@ -36,7 +42,8 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class XcxAuthStrategy implements IAuthStrategy {
 
-    private final SysLoginService loginService;
+    private final IAppUserService appUserService;
+    private final WxMiniappProperties wxMiniappProperties;
 
     @Override
     public LoginVo login(String body, SysClientVo client) {
@@ -47,31 +54,47 @@ public class XcxAuthStrategy implements IAuthStrategy {
         // 多个小程序识别使用
         String appid = loginBody.getAppid();
 
-        // 校验 appid + appsrcret + xcxCode 调用登录凭证校验接口 获取 session_key 与 openid
-        AuthRequest authRequest = new AuthWechatMiniProgramRequest(AuthConfig.builder()
-            .clientId(appid).clientSecret("自行填写密钥 可根据不同appid填入不同密钥")
-            .ignoreCheckRedirectUri(true).ignoreCheckState(true).build());
-        AuthCallback authCallback = new AuthCallback();
-        authCallback.setCode(xcxCode);
-        AuthResponse<AuthUser> resp = authRequest.login(authCallback);
-        String openid, unionId;
-        if (resp.ok()) {
-            AuthToken token = resp.getData().getToken();
-            openid = token.getOpenId();
-            // 微信小程序只有关联到微信开放平台下之后才能获取到 unionId，因此unionId不一定能返回。
-            unionId = token.getUnionId();
-        } else {
-            throw new ServiceException(resp.getMsg());
-        }
+        // ==================== 测试阶段 MOCK：跳过微信 API 调用 ====================
+        // 原因：当前没有真实的小程序 appid/appsecret，无法调用微信 jscode2session 接口
+        // 方案：直接用前端传入的 xcxCode 作为 openid（测试时 xcxCode 可任意填写）
+        // TODO: 上线前必须恢复为下方的【生产环境代码】
+        String openid = xcxCode;
+        String unionId = null;
+        log.info("【测试模式】跳过微信认证，使用 mock openid: {}", openid);
+        // ==================== 测试阶段 MOCK 结束 ====================
+
+        // ==================== 【生产环境代码】上线前恢复以下注释 ====================
+        // 1. 根据请求中的 appid 从配置中读取对应的 appsecret
+        // String appSecret = wxMiniappProperties.getConfigs().get(appid);
+        // if (StringUtils.isBlank(appSecret)) {
+        //     throw new ServiceException("未配置小程序 appsecret: " + appid);
+        // }
+        //
+        // 2. 调用微信登录凭证校验接口，获取 session_key 与 openid
+        // AuthRequest authRequest = new AuthWechatMiniProgramRequest(AuthConfig.builder()
+        //     .clientId(appid).clientSecret(appSecret)
+        //     .ignoreCheckRedirectUri(true).ignoreCheckState(true).build());
+        // AuthCallback authCallback = new AuthCallback();
+        // authCallback.setCode(xcxCode);
+        // AuthResponse<AuthUser> resp = authRequest.login(authCallback);
+        // String openid, unionId;
+        // if (resp.ok()) {
+        //     AuthToken token = resp.getData().getToken();
+        //     openid = token.getOpenId();
+        //     // 微信小程序只有关联到微信开放平台下之后才能获取到 unionId，因此unionId不一定能返回。
+        //     unionId = token.getUnionId();
+        // } else {
+        //     throw new ServiceException(resp.getMsg());
+        // }
+        // ==================== 【生产环境代码】结束 ====================
         // 框架登录不限制从什么表查询 只要最终构建出 LoginUser 即可
-        SysUserVo user = loadUserByOpenid(openid);
+        AppUserVo user = loadUserByOpenid(openid);
         // 此处可根据登录用户的数据不同 自行创建 loginUser 属性不够用继承扩展就行了
         XcxLoginUser loginUser = new XcxLoginUser();
-        loginUser.setTenantId(user.getTenantId());
         loginUser.setUserId(user.getUserId());
-        loginUser.setUsername(user.getUserName());
+        loginUser.setUsername(user.getNickName());
         loginUser.setNickname(user.getNickName());
-        loginUser.setUserType(user.getUserType());
+        loginUser.setUserType(UserType.APP_USER.getUserType());
         loginUser.setClientKey(client.getClientKey());
         loginUser.setDeviceType(client.getDeviceType());
         loginUser.setOpenid(openid);
@@ -94,16 +117,23 @@ public class XcxAuthStrategy implements IAuthStrategy {
         return loginVo;
     }
 
-    private SysUserVo loadUserByOpenid(String openid) {
-        // 使用 openid 查询绑定用户 如未绑定用户 则根据业务自行处理 例如 创建默认用户
-        // todo 自行实现 userService.selectUserByOpenid(openid);
-        SysUserVo user = new SysUserVo();
+    private AppUserVo loadUserByOpenid(String openid) {
+        // 使用 openid 查询 C 端用户
+        AppUserVo user = appUserService.selectByOpenid(openid);
         if (ObjectUtil.isNull(user)) {
-            log.info("登录用户：{} 不存在.", openid);
-            // todo 用户不存在 业务逻辑自行实现
-        } else if (SystemConstants.DISABLE.equals(user.getStatus())) {
+            log.info("登录用户 openid: {} 不存在，自动注册.", openid);
+            // 自动注册新用户
+            AppUser newUser = new AppUser();
+            newUser.setNickName("微信用户" + RandomUtil.randomNumbers(4));
+            newUser.setOpenid(openid);
+            newUser.setStatus(SystemConstants.NORMAL);
+            appUserService.insertUser(newUser);
+            // 重新查询获取完整用户信息（包括自增的 user_id）
+            user = appUserService.selectByOpenid(openid);
+        }
+        if (SystemConstants.DISABLE.equals(user.getStatus())) {
             log.info("登录用户：{} 已被停用.", openid);
-            // todo 用户已被停用 业务逻辑自行实现
+            throw new ServiceException("用户已被停用");
         }
         return user;
     }
