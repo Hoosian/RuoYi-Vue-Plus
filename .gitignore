@@ -56,3 +56,6 @@ nbdist/
 
 # Claude 本地笔记索引（含个人文件路径）
 /CLAUDE_NOTES.md
+
+# sql文件 后续添加的
+/script/sql/other

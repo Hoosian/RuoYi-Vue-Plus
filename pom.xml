@@ -357,6 +357,13 @@
                 <version>${revision}</version>
             </dependency>
 
+            <!--  生活记录模块  -->
+            <dependency>
+                <groupId>org.dromara</groupId>
+                <artifactId>ruoyi-life-record</artifactId>
+                <version>${revision}</version>
+            </dependency>
+
         </dependencies>
     </dependencyManagement>
 
