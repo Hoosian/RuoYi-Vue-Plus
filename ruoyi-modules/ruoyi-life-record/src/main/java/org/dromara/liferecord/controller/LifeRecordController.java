@@ -97,6 +97,18 @@ public class LifeRecordController extends BaseController {
     }
 
     /**
+     * 修改日记状态（下架/恢复）
+     */
+    @SaCheckPermission("life-record:life-record:edit")
+    @Log(title = "日记", businessType = BusinessType.UPDATE)
+    @RepeatSubmit()
+    @PutMapping("/status")
+    public R<Void> changeStatus(@NotNull(message = "主键不能为空") @RequestParam Long recordId,
+                                  @NotNull(message = "状态不能为空") @RequestParam Long status) {
+        return toAjax(lifeRecordService.updateStatus(recordId, status));
+    }
+
+    /**
      * 删除日记
      *
      * @param recordIds 主键串

@@ -58,6 +58,15 @@ public interface ILifeRecordService {
     Boolean updateByBo(LifeRecordBo bo);
 
     /**
+     * 修改日记状态（下架/恢复）
+     *
+     * @param recordId 日记ID
+     * @param status   状态（0正常 1下架）
+     * @return 是否修改成功
+     */
+    Boolean updateStatus(Long recordId, Long status);
+
+    /**
      * 校验并批量删除日记信息
      *
      * @param ids     待删除的主键集合
