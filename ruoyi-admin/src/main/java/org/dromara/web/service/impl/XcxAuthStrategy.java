@@ -18,6 +18,7 @@ import org.dromara.common.core.domain.model.XcxLoginBody;
 import org.dromara.common.core.domain.model.XcxLoginUser;
 import org.dromara.common.core.enums.UserType;
 import org.dromara.common.core.exception.ServiceException;
+import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.core.utils.ValidatorUtils;
 import org.dromara.common.json.utils.JsonUtils;
 import org.dromara.common.satoken.utils.LoginHelper;
@@ -29,8 +30,6 @@ import org.dromara.web.domain.vo.LoginVo;
 import org.dromara.web.service.IAuthStrategy;
 import org.dromara.system.domain.vo.SysClientVo;
 import org.springframework.stereotype.Service;
-
-import java.util.Map;
 
 /**
  * 小程序认证策略
@@ -54,39 +53,28 @@ public class XcxAuthStrategy implements IAuthStrategy {
         // 多个小程序识别使用
         String appid = loginBody.getAppid();
 
-        // ==================== 测试阶段 MOCK：跳过微信 API 调用 ====================
-        // 原因：当前没有真实的小程序 appid/appsecret，无法调用微信 jscode2session 接口
-        // 方案：直接用前端传入的 xcxCode 作为 openid（测试时 xcxCode 可任意填写）
-        // TODO: 上线前必须恢复为下方的【生产环境代码】
-        String openid = xcxCode;
-        String unionId = null;
-        log.info("【测试模式】跳过微信认证，使用 mock openid: {}", openid);
-        // ==================== 测试阶段 MOCK 结束 ====================
-
-        // ==================== 【生产环境代码】上线前恢复以下注释 ====================
         // 1. 根据请求中的 appid 从配置中读取对应的 appsecret
-        // String appSecret = wxMiniappProperties.getConfigs().get(appid);
-        // if (StringUtils.isBlank(appSecret)) {
-        //     throw new ServiceException("未配置小程序 appsecret: " + appid);
-        // }
-        //
+        String appSecret = wxMiniappProperties.getConfigs().get(appid);
+        if (StringUtils.isBlank(appSecret)) {
+            throw new ServiceException("未配置小程序 appsecret: " + appid);
+        }
+
         // 2. 调用微信登录凭证校验接口，获取 session_key 与 openid
-        // AuthRequest authRequest = new AuthWechatMiniProgramRequest(AuthConfig.builder()
-        //     .clientId(appid).clientSecret(appSecret)
-        //     .ignoreCheckRedirectUri(true).ignoreCheckState(true).build());
-        // AuthCallback authCallback = new AuthCallback();
-        // authCallback.setCode(xcxCode);
-        // AuthResponse<AuthUser> resp = authRequest.login(authCallback);
-        // String openid, unionId;
-        // if (resp.ok()) {
-        //     AuthToken token = resp.getData().getToken();
-        //     openid = token.getOpenId();
-        //     // 微信小程序只有关联到微信开放平台下之后才能获取到 unionId，因此unionId不一定能返回。
-        //     unionId = token.getUnionId();
-        // } else {
-        //     throw new ServiceException(resp.getMsg());
-        // }
-        // ==================== 【生产环境代码】结束 ====================
+        AuthRequest authRequest = new AuthWechatMiniProgramRequest(AuthConfig.builder()
+            .clientId(appid).clientSecret(appSecret)
+            .ignoreCheckRedirectUri(true).ignoreCheckState(true).build());
+        AuthCallback authCallback = new AuthCallback();
+        authCallback.setCode(xcxCode);
+        AuthResponse<AuthUser> resp = authRequest.login(authCallback);
+        String openid;
+        if (resp.ok()) {
+            AuthToken token = resp.getData().getToken();
+            openid = token.getOpenId();
+            // 微信小程序只有关联到微信开放平台下之后才能获取到 unionId，因此unionId不一定能返回。
+            // unionId = token.getUnionId();
+        } else {
+            throw new ServiceException(resp.getMsg());
+        }
         // 框架登录不限制从什么表查询 只要最终构建出 LoginUser 即可
         AppUserVo user = loadUserByOpenid(openid);
         // 此处可根据登录用户的数据不同 自行创建 loginUser 属性不够用继承扩展就行了
