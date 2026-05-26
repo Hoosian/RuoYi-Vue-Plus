@@ -5,7 +5,9 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -20,6 +22,9 @@ import org.dromara.liferecord.domain.bo.LifeRecordBo;
 import org.dromara.liferecord.domain.vo.LifeRecordVo;
 import org.dromara.liferecord.mapper.LifeRecordMapper;
 import org.dromara.liferecord.service.ILifeRecordService;
+import org.dromara.system.domain.vo.SysOssUploadVo;
+import org.dromara.system.domain.vo.SysOssVo;
+import org.dromara.system.service.ISysOssService;
 
 /**
  * 日记-小程序端
@@ -34,6 +39,7 @@ public class LifeRecordMiniController extends BaseController {
 
     private final ILifeRecordService lifeRecordService;
     private final LifeRecordMapper lifeRecordMapper;
+    private final ISysOssService ossService;
 
     /**
      * 写日记
@@ -125,5 +131,20 @@ public class LifeRecordMiniController extends BaseController {
             })
             .collect(Collectors.toList());
         return R.ok(dates);
+    }
+
+    /**
+     * 上传文件（小程序端）
+     *
+     * @param file 文件
+     */
+    @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public R<SysOssUploadVo> upload(@RequestPart("file") MultipartFile file) {
+        SysOssVo oss = ossService.upload(file);
+        SysOssUploadVo uploadVo = new SysOssUploadVo();
+        uploadVo.setUrl(oss.getUrl());
+        uploadVo.setFileName(oss.getOriginalName());
+        uploadVo.setOssId(oss.getOssId().toString());
+        return R.ok(uploadVo);
     }
 }
