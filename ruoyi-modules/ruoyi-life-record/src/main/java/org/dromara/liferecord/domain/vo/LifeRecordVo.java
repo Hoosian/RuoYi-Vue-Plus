@@ -2,6 +2,8 @@ package org.dromara.liferecord.domain.vo;
 
 import java.util.Date;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import org.dromara.liferecord.domain.LifeRecord;
 import cn.idev.excel.annotation.ExcelIgnoreUnannotated;
 import cn.idev.excel.annotation.ExcelProperty;
@@ -34,6 +36,7 @@ public class LifeRecordVo implements Serializable {
      * 日记ID
      */
     @ExcelProperty(value = "日记ID")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long recordId;
 
     /**
