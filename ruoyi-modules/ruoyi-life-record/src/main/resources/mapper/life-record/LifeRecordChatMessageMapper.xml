@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.dromara.liferecord.mapper.LifeRecordChatMessageMapper">
+
+    <resultMap type="org.dromara.liferecord.domain.vo.LifeRecordChatMessageVo" id="LifeRecordChatMessageResult">
+        <id property="messageId" column="message_id"/>
+        <result property="fromUserId" column="from_user_id"/>
+        <result property="toUserId" column="to_user_id"/>
+        <result property="content" column="content"/>
+        <result property="isRead" column="is_read"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <sql id="selectLifeRecordChatMessageVo">
+        select message_id, from_user_id, to_user_id, content, is_read, create_time, update_time
+        from life_record_chat_message
+    </sql>
+
+    <select id="selectChatHistory" resultMap="LifeRecordChatMessageResult">
+        <include refid="selectLifeRecordChatMessageVo"/>
+        where del_flag = '0'
+        and ((from_user_id = #{userId1} and to_user_id = #{userId2})
+        or (from_user_id = #{userId2} and to_user_id = #{userId1}))
+        order by create_time asc
+    </select>
+
+</mapper>
